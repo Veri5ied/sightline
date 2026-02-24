@@ -93,10 +93,20 @@ pnpm run start
 gcloud builds submit --config cloudbuild.yaml
 ```
 
+### option 1b: automatic deploy on push
+
+Set a Cloud Build trigger that runs `cloudbuild.yaml` on push to `main`.
+
+Required one-time IAM for Cloud Build service account (`PROJECT_NUMBER@cloudbuild.gserviceaccount.com`):
+
+- `roles/run.admin`
+- `roles/artifactregistry.writer`
+- `roles/iam.serviceAccountUser`
+
 ### option 2: manual container
 
 ```bash
-docker build -f dockerfile -t sightline-live .
+docker build -f Dockerfile -t sightline-live .
 docker run -p 8080:8080 --env-file .env sightline-live
 ```
 

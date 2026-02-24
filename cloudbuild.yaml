@@ -1,33 +1,49 @@
+substitutions:
+  _REGION: us-central1
+  _SERVICE: sightline-live
+  _REPOSITORY: sightline-live
+  _MODEL: gemini-2.5-flash-native-audio-preview-12-2025
+
 steps:
   - name: gcr.io/cloud-builders/docker
     args:
       - build
       - -f
-      - dockerfile
+      - Dockerfile
       - -t
-      - gcr.io/$PROJECT_ID/live-agent-lab:$COMMIT_SHA
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:$COMMIT_SHA
+      - -t
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest
       - .
 
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - gcr.io/$PROJECT_ID/live-agent-lab:$COMMIT_SHA
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:$COMMIT_SHA
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - live-agent-lab
+      - $_SERVICE
       - --image
-      - gcr.io/$PROJECT_ID/live-agent-lab:$COMMIT_SHA
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:$COMMIT_SHA
       - --region
-      - us-central1
+      - $_REGION
       - --platform
       - managed
       - --allow-unauthenticated
+      - --set-secrets
+      - GEMINI_API_KEY=gemini-api-key:latest
       - --set-env-vars
-      - GEMINI_LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
+      - GEMINI_LIVE_MODEL=$_MODEL
 
 images:
-  - gcr.io/$PROJECT_ID/live-agent-lab:$COMMIT_SHA
+  - $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:$COMMIT_SHA
+  - $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest
