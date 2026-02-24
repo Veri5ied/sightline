@@ -1,0 +1,33 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - dockerfile
+      - -t
+      - gcr.io/$PROJECT_ID/live-agent-lab:$COMMIT_SHA
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/live-agent-lab:$COMMIT_SHA
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - live-agent-lab
+      - --image
+      - gcr.io/$PROJECT_ID/live-agent-lab:$COMMIT_SHA
+      - --region
+      - us-central1
+      - --platform
+      - managed
+      - --allow-unauthenticated
+      - --set-env-vars
+      - GEMINI_LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
+
+images:
+  - gcr.io/$PROJECT_ID/live-agent-lab:$COMMIT_SHA
