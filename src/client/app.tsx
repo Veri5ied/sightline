@@ -354,7 +354,10 @@ export const App = () => {
 
       const now = Date.now();
 
-      if (mode === "auto" && now - lastVisionFeedbackRequestAtRef.current < 6500) {
+      if (
+        mode === "auto" &&
+        now - lastVisionFeedbackRequestAtRef.current < 6500
+      ) {
         return;
       }
 
@@ -364,7 +367,10 @@ export const App = () => {
 
       lastVisionFeedbackRequestAtRef.current = now;
 
-      sendTextTurn(mode === "manual" ? manualVisionPrompt : autoVisionPrompt, true);
+      sendTextTurn(
+        mode === "manual" ? manualVisionPrompt : autoVisionPrompt,
+        true,
+      );
 
       if (mode === "manual") {
         appendEntry({
@@ -430,25 +436,26 @@ export const App = () => {
   }, [connectionState]);
 
   const resolvedModelLabel = modelLabel || "pending...";
+  const stageHeadline =
+    agentPartial ||
+    (waitingForInput
+      ? "Listening for your next instruction."
+      : connectionState === "connected"
+        ? "Sightline Live is ready to assist."
+        : "Start a live session to begin.");
 
   return (
-    <div className="page-shell">
-      <header className="hero-header">
-        <div>
-          <p className="eyebrow">sightline live</p>
-          <h1>Sightline Live</h1>
-          <p className="hero-subtitle">
-            Realtime voice + vision assistant using Gemini Live API with
-            interruption support.
-          </p>
-        </div>
-        <span className={`status-badge status-${connectionState}`}>
-          {titleStatus}
-        </span>
-      </header>
+    <div className="app-scene">
+      <div className="studio-frame">
+        <aside className="studio-sidebar">
+          <div className="sidebar-brand-row">
+            <div className="brand-glyph" />
+            <div>
+              <p className="sidebar-brand-title">sightline</p>
+              <p className="sidebar-brand-subtitle">live agent</p>
+            </div>
+          </div>
 
-      <main className="main-grid">
-        <div className="left-column">
           <ControlPanel
             connectionState={connectionState}
             modelLabel={resolvedModelLabel}
@@ -476,14 +483,58 @@ export const App = () => {
             stream={previewStream}
             cameraEnabled={cameraEnabled && liveInputEnabled}
           />
-        </div>
+        </aside>
 
-        <TranscriptPanel
-          entries={entries}
-          userPartial={userPartial}
-          agentPartial={agentPartial}
-        />
-      </main>
+        <section className="studio-stage">
+          <div className="stage-top-row">
+            {/*  <span className="stage-pill">daily design challenge</span> */}
+            <span className="stage-pill">model: {resolvedModelLabel}</span>
+          </div>
+
+          <div className="stage-core-card">
+            <button type="button" className="stage-close-button" disabled>
+              x
+            </button>
+            <p className="stage-headline">{stageHeadline}</p>
+            <div className="stage-wave-wrap">
+              <span className="stage-wave-line" />
+              <span className="stage-wave-line" />
+              <span className="stage-wave-line" />
+              <span className="stage-wave-line" />
+            </div>
+
+            <button
+              type="button"
+              className={`stage-mic-button ${micEnabled ? "active" : ""}`}
+              onClick={() => onMicToggle(!micEnabled)}
+              disabled={!liveInputEnabled}
+            >
+              mic
+            </button>
+
+            <p className="stage-status-line">{titleStatus}</p>
+            {userPartial ? (
+              <p className="stage-user-preview">you: {userPartial}</p>
+            ) : null}
+          </div>
+
+          <div className="stage-orb" />
+        </section>
+
+        <aside className="studio-transcript">
+          <div className="transcript-header-shell">
+            <p className="transcript-shell-title">conversation</p>
+            <span className={`status-badge status-${connectionState}`}>
+              {titleStatus}
+            </span>
+          </div>
+          <TranscriptPanel
+            entries={entries}
+            userPartial={userPartial}
+            agentPartial={agentPartial}
+          />
+        </aside>
+      </div>
     </div>
   );
 };

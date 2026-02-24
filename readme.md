@@ -1,4 +1,4 @@
-# sightline-live
+# Sightline
 
 A realtime **Live Agent** built with TypeScript, Gemini Live API, microphone streaming, camera-frame streaming, and interruption handling.
 
