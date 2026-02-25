@@ -132,7 +132,7 @@ export const ControlPanel = ({
           onChange={(event) => onVisionAutoFeedbackToggle(event.target.checked)}
           disabled={!connected || !cameraEnabled}
         />
-        auto vision feedback (no mic)
+        auto observe mode (silence-aware)
       </label>
 
       <label className="field-label" htmlFor="text-turn-input">
@@ -157,6 +157,10 @@ export const ControlPanel = ({
           interrupt now
         </button>
       </div>
+
+      <p className="hint-text">
+        Frames are auto-analyzed while camera stream is on. Use &quot;analyze latest frame&quot; for an immediate check.
+      </p>
     </section>
   );
 };

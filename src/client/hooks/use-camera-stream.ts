@@ -3,13 +3,15 @@ import { useEffect, useState } from 'react';
 interface UseCameraStreamOptions {
   enabled: boolean;
   frameIntervalMs?: number;
+  sceneChangeThreshold?: number;
   onFrame: (data: string, mimeType: string) => void;
   onError: (message: string) => void;
 }
 
 export const useCameraStream = ({
   enabled,
-  frameIntervalMs = 900,
+  frameIntervalMs = 2400,
+  sceneChangeThreshold = 12,
   onFrame,
   onError
 }: UseCameraStreamOptions): MediaStream | null => {
@@ -29,12 +31,69 @@ export const useCameraStream = ({
     videoElement.playsInline = true;
     videoElement.muted = true;
 
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
+    const frameCanvas = document.createElement('canvas');
+    const frameContext = frameCanvas.getContext('2d');
+    const sceneCanvas = document.createElement('canvas');
+    sceneCanvas.width = 32;
+    sceneCanvas.height = 18;
+    const sceneContext = sceneCanvas.getContext('2d', {
+      willReadFrequently: true
+    });
+    let lastSceneSample: Float32Array | null = null;
+
+    const getSceneSignature = (): Float32Array | null => {
+      if (!sceneContext) {
+        return null;
+      }
+
+      sceneContext.drawImage(
+        videoElement,
+        0,
+        0,
+        videoElement.videoWidth,
+        videoElement.videoHeight,
+        0,
+        0,
+        sceneCanvas.width,
+        sceneCanvas.height
+      );
+
+      const imageData = sceneContext.getImageData(0, 0, sceneCanvas.width, sceneCanvas.height).data;
+      const signature = new Float32Array(sceneCanvas.width * sceneCanvas.height);
+
+      for (let sourceIndex = 0, targetIndex = 0; sourceIndex < imageData.length; sourceIndex += 4, targetIndex += 1) {
+        const red = imageData[sourceIndex];
+        const green = imageData[sourceIndex + 1];
+        const blue = imageData[sourceIndex + 2];
+        signature[targetIndex] = red * 0.299 + green * 0.587 + blue * 0.114;
+      }
+
+      return signature;
+    };
+
+    const hasMeaningfulSceneChange = (nextSample: Float32Array): boolean => {
+      if (!lastSceneSample) {
+        return true;
+      }
+
+      let totalDiff = 0;
+
+      for (let index = 0; index < nextSample.length; index += 1) {
+        totalDiff += Math.abs(nextSample[index] - lastSceneSample[index]);
+      }
+
+      const averageDiff = totalDiff / nextSample.length;
+      return averageDiff >= sceneChangeThreshold;
+    };
 
     const start = async (): Promise<void> => {
-      if (!context) {
+      if (!frameContext) {
         onError('Unable to create camera canvas context.');
+        return;
+      }
+
+      if (!sceneContext) {
+        onError('Unable to create camera scene analysis context.');
         return;
       }
 
@@ -62,11 +121,23 @@ export const useCameraStream = ({
             return;
           }
 
-          canvas.width = videoElement.videoWidth;
-          canvas.height = videoElement.videoHeight;
-          context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+          const sceneSample = getSceneSignature();
 
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+          if (!sceneSample) {
+            return;
+          }
+
+          if (!hasMeaningfulSceneChange(sceneSample)) {
+            return;
+          }
+
+          lastSceneSample = sceneSample;
+
+          frameCanvas.width = videoElement.videoWidth;
+          frameCanvas.height = videoElement.videoHeight;
+          frameContext.drawImage(videoElement, 0, 0, frameCanvas.width, frameCanvas.height);
+
+          const dataUrl = frameCanvas.toDataURL('image/jpeg', 0.72);
           const commaIndex = dataUrl.indexOf(',');
 
           if (commaIndex === -1) {
@@ -96,7 +167,7 @@ export const useCameraStream = ({
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [enabled, frameIntervalMs, onError, onFrame]);
+  }, [enabled, frameIntervalMs, onError, onFrame, sceneChangeThreshold]);
 
   return previewStream;
 };

@@ -77,6 +77,59 @@ Browser flow:
 4. Speak naturally.
 5. Interrupt by speaking again or pressing **interrupt now**.
 
+## reproducible testing (for judges)
+
+Use this section to verify the project from a clean checkout.
+
+### 1) install + static checks
+
+```bash
+pnpm install
+pnpm run typecheck
+pnpm run build
+```
+
+Pass criteria:
+
+- `typecheck` exits with code `0`
+- `build` exits with code `0`
+- server build output exists under `dist/server/`
+- client build output exists under `dist/client/`
+
+### 2) local runtime smoke test
+
+```bash
+cp .env.example .env
+# set GEMINI_API_KEY in .env
+pnpm run dev
+```
+
+Open `http://localhost:5173` and run this checklist:
+
+1. Click **start live session** -> transcript shows `Session connected`.
+2. Enable **stream microphone audio** -> user speech appears in transcript.
+3. Enable **stream camera frames** + **auto observe mode** -> agent gives proactive visual feedback after brief user silence.
+4. Click **analyze latest frame** -> immediate vision response appears.
+5. Click **interrupt now** while agent is speaking -> interruption event appears and model output stops.
+6. Click **stop session** -> transcript shows `Session closed`.
+
+### 3) deployed runtime smoke test (google cloud run)
+
+```bash
+# replace with your Cloud Run URL
+curl -s https://YOUR_CLOUD_RUN_URL/api/health
+```
+
+Pass criteria:
+
+- health endpoint returns JSON with `ok: true`
+- same 6-step UI checklist above works on deployed URL
+
+Notes for judges:
+
+- If Gemini quota is exhausted, the app returns a clear `429` quota message.
+- This repository currently focuses on integration/runtime validation (`typecheck`, `build`, live smoke flow) instead of standalone unit tests.
+
 ## build and start
 
 ```bash

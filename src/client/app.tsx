@@ -34,7 +34,11 @@ const normalizeTranscriptText = (value: string): string => {
 const manualVisionPrompt =
   "Analyze the latest camera frame now. Give concise feedback about what you see and one actionable suggestion.";
 const autoVisionPrompt =
-  "Based on the latest camera frame, provide a short helpful update. Mention what changed and one next step.";
+  "You are in auto-observe mode. Give one concise spoken update about the latest scene change, one practical next step, and ask one short clarifying question only if context is unclear.";
+const autoObserveFrameIntervalMs = 2500;
+const userSilenceThresholdMs = 8000;
+const autoFeedbackCooldownMs = 18000;
+const autoFeedbackFrameFreshnessMs = 8000;
 
 export const App = () => {
   const [systemInstruction, setSystemInstruction] =
@@ -54,6 +58,7 @@ export const App = () => {
   const userPartialRef = useRef("");
   const lastFrameCaptureAtRef = useRef(0);
   const lastVisionFeedbackRequestAtRef = useRef(0);
+  const lastUserActivityAtRef = useRef(0);
   const { enqueueChunk: playAgentAudioChunk, stop: stopAgentAudioPlayback } =
     useAgentAudioPlayback();
 
@@ -123,6 +128,8 @@ export const App = () => {
       }
 
       if (message.type === "session.connected") {
+        const now = Date.now();
+        lastUserActivityAtRef.current = now;
         lastVisionFeedbackRequestAtRef.current = 0;
         appendEntry({
           role: "event",
@@ -145,11 +152,16 @@ export const App = () => {
         setAgentPartial("");
         lastFrameCaptureAtRef.current = 0;
         lastVisionFeedbackRequestAtRef.current = 0;
+        lastUserActivityAtRef.current = 0;
         stopAgentAudioPlayback();
         return;
       }
 
       if (message.type === "user.transcript") {
+        if (message.text.trim()) {
+          lastUserActivityAtRef.current = Date.now();
+        }
+
         setUserPartial(message.text);
         userPartialRef.current = message.text;
 
@@ -291,12 +303,14 @@ export const App = () => {
 
   const previewStream = useCameraStream({
     enabled: liveInputEnabled && cameraEnabled,
+    frameIntervalMs: autoObserveFrameIntervalMs,
     onFrame: onCameraFrame,
     onError: onCameraStreamError,
   });
 
   const onMicToggle = useCallback(
     (enabled: boolean) => {
+      lastUserActivityAtRef.current = Date.now();
       setMicEnabled(enabled);
 
       if (!enabled && liveInputEnabled) {
@@ -317,6 +331,7 @@ export const App = () => {
       return;
     }
 
+    lastUserActivityAtRef.current = Date.now();
     startSession(systemInstruction);
   }, [appendEntry, modelLabel, startSession, systemInstruction]);
 
@@ -328,6 +343,7 @@ export const App = () => {
     setWaitingForInput(false);
     lastFrameCaptureAtRef.current = 0;
     lastVisionFeedbackRequestAtRef.current = 0;
+    lastUserActivityAtRef.current = 0;
     stopAgentAudioPlayback();
   }, [flushUserPartial, stopAgentAudioPlayback, stopSession]);
 
@@ -339,6 +355,7 @@ export const App = () => {
     }
 
     sendTextTurn(trimmed, true);
+    lastUserActivityAtRef.current = Date.now();
     appendEntry({
       role: "user",
       text: trimmed,
@@ -356,12 +373,15 @@ export const App = () => {
 
       if (
         mode === "auto" &&
-        now - lastVisionFeedbackRequestAtRef.current < 6500
+        now - lastVisionFeedbackRequestAtRef.current < autoFeedbackCooldownMs
       ) {
         return;
       }
 
-      if (now - lastFrameCaptureAtRef.current > 4500) {
+      if (
+        mode === "auto" &&
+        now - lastFrameCaptureAtRef.current > autoFeedbackFrameFreshnessMs
+      ) {
         return;
       }
 
@@ -373,6 +393,7 @@ export const App = () => {
       );
 
       if (mode === "manual") {
+        lastUserActivityAtRef.current = now;
         appendEntry({
           role: "user",
           text: "[vision] analyze latest frame",
@@ -383,6 +404,7 @@ export const App = () => {
   );
 
   const onInterrupt = useCallback(() => {
+    lastUserActivityAtRef.current = Date.now();
     sendActivityStart();
     window.setTimeout(() => {
       sendActivityEnd();
@@ -401,15 +423,18 @@ export const App = () => {
       !visionAutoFeedbackEnabled ||
       !liveInputEnabled ||
       !cameraEnabled ||
-      !waitingForInput ||
-      micEnabled
+      !waitingForInput
     ) {
       return;
     }
 
     const intervalId = window.setInterval(() => {
+      if (Date.now() - lastUserActivityAtRef.current < userSilenceThresholdMs) {
+        return;
+      }
+
       requestVisionFeedback("auto");
-    }, 7000);
+    }, 2000);
 
     return () => {
       window.clearInterval(intervalId);
@@ -417,7 +442,6 @@ export const App = () => {
   }, [
     cameraEnabled,
     liveInputEnabled,
-    micEnabled,
     requestVisionFeedback,
     visionAutoFeedbackEnabled,
     waitingForInput,
